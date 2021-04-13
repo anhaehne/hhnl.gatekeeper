@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Buffers;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -17,12 +18,40 @@ namespace hhnl.gatekeeper.Services
 
         public double RecognizeFacesInImage(Stream image1, Stream image2)
         {
-            using var first = GetEncoding(image1);
-            using var sec = GetEncoding(image2);
+            using var first = GetEncodings(image1).First();
+            using var sec = GetEncodings(image2).First();
 
             return FaceRecognition.FaceDistance(first, sec);
         }
 
+        public void Test(string s)
+        {
+            using (var unknownImage = FaceRecognition.LoadImageFile(s))
+            {
+                var faceLocations = fr.FaceLocations(unknownImage, 3).ToArray();
+
+                Console.WriteLine(faceLocations.Length);
+                
+                foreach (var faceLocation in faceLocations)
+                    PrintResult(s, faceLocation);
+            }
+        }
+        
+        private static void PrintResult(string filename, Location location)
+        {
+            Console.WriteLine($"{filename},{location.Top},{location.Right},{location.Bottom},{location.Left}");
+        }
+        
+        public void EncodeImage(Stream image)
+        {
+            var encodings = GetEncodings(image);
+
+            foreach (var encoding in encodings)
+            {
+                
+                encoding.Dispose();
+            }
+        }
 
         private (int Width, int Height) GetResizedImageSize(SKBitmap sourceBitmap)
         {
@@ -40,9 +69,19 @@ namespace hhnl.gatekeeper.Services
             }
         }
 
-        private FaceEncoding GetEncoding(Stream image)
+        private IEnumerable<FaceEncoding> GetEncodings(Stream image)
         {
             using var sourceBitmap = SKBitmap.Decode(image);
+
+            using var defaultImageArray = Dlib.LoadImageData<RgbPixel>(ImagePixelFormat.Bgra,
+                sourceBitmap.Bytes,
+                (uint)sourceBitmap.Height,
+                (uint)sourceBitmap.Width,
+                (uint)sourceBitmap.RowBytes);
+            var dmatrix =  new Matrix<RgbPixel>(defaultImageArray);
+            var dfaceImage = (Image)_imageConstructor.Invoke(new object[] { dmatrix, Mode.Rgb });
+            var dLocations = fr.FaceLocations(dfaceImage).ToList();
+            
             var (newWidth, newHeight) = GetResizedImageSize(sourceBitmap);
             using var scaledBitmap = Scale(sourceBitmap, newWidth , newHeight);
 
@@ -57,9 +96,10 @@ namespace hhnl.gatekeeper.Services
 
             var faceImage = (Image)_imageConstructor.Invoke(new object[] { matrix, Mode.Rgb });
 
-            var t = fr.FaceEncodings(faceImage);
+            var faceLocations = fr.FaceLocations(faceImage);
+            var encodings = fr.FaceEncodings(faceImage, faceLocations);
 
-            return t.Single();
+            return encodings;
         }
 
         private SKBitmap Scale(SKBitmap input, int width, int height)
