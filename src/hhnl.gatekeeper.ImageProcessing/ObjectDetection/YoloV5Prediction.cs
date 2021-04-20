@@ -23,7 +23,7 @@ namespace hhnl.gatekeeper.ImageProcessing.ObjectDetection
 
         [ColumnName("height")] public float ImageHeight { get; set; }
 
-        public IReadOnlyList<YoloV5Result> GetResults(float scoreThres = 0.5f, float iouThres = 0.5f)
+        public IReadOnlyList<YoloV5Result> GetResults(IReadOnlyCollection<YoloV5ObjectClass> classes, float scoreThres = 0.5f, float iouThres = 0.5f)
         {
             // Probabilities + Characteristics
             var characteristics = _classLength + 5;
@@ -59,7 +59,9 @@ namespace hhnl.gatekeeper.ImageProcessing.ObjectDetection
                 // Get best class and index
                 var (maxConf, maxClass) = GetMaxClassConf(classProbabilities, objConf);
 
-                postProcessedResults.Add(new[] { x1, y1, x2, y2, maxConf, maxClass });
+                // Skip ignored classes.
+                if(classes.Contains((YoloV5ObjectClass)(int)maxClass))
+                    postProcessedResults.Add(new[] { x1, y1, x2, y2, maxConf, maxClass });
             }
 
             var resultsNms = ApplyNMS(postProcessedResults, iouThres);

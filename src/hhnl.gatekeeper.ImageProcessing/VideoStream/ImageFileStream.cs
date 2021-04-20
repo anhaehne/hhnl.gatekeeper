@@ -70,7 +70,7 @@ namespace hhnl.gatekeeper.ImageProcessing.VideoStream
             }
         }
 
-        private class Frame : IFrame
+        private class Frame : ManagedObjectBase, IFrame
         {
             private static long _frameCounter;
             private readonly Bitmap _original;
@@ -83,10 +83,12 @@ namespace hhnl.gatekeeper.ImageProcessing.VideoStream
                 Id = Interlocked.Increment(ref _frameCounter);
             }
 
-            public void Dispose()
+            protected override void Dispose()
             {
                 _originalPool.Return(_original);
             }
+
+            public Bitmap Original => _original;
 
             public Task<Bitmap> ToScaledBitmapAsync(int width, int height)
             {

@@ -1,10 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Buffers;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.IO;
-using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using FFMediaToolkit;
@@ -16,54 +15,48 @@ namespace hhnl.gatekeeper.ImageProcessing.VideoStream
 {
     public class VideoFileStream : IVideoStream
     {
-        private readonly string _filePath;
-        private MediaFile _mediaFile;
+        private readonly MediaFile _mediaFile;
 
         static VideoFileStream()
         {
             FFmpegLoader.FFmpegPath = Path.GetFullPath("./../../../../../libs/ffmpeg");
         }
-        
+
         public VideoFileStream(string filePath)
         {
-            _filePath = filePath;
-            _mediaFile = MediaFile.Open(_filePath);
+            _mediaFile = MediaFile.Open(filePath);
         }
 
         // You have to install ffmpeg libraries. See: https://github.com/radek-k/FFMediaToolkit
         // Copy the dlls to libs/ffmpg.
-
         public Task<IFrame?> GetNextFrameAsync(CancellationToken cancellationToken = default)
         {
+            Thread.Sleep(30);
+
             if (!_mediaFile.Video.TryGetNextFrame(out var imageData))
                 return Task.FromResult<IFrame?>(null);
 
-            var bitmap = ToBitmap(imageData);
-            
-            return Task.FromResult<IFrame?>(new Frame(bitmap));
+            return Task.FromResult<IFrame?>(new Frame(imageData));
         }
-        
-        public unsafe Bitmap ToBitmap(ImageData bitmap)
-        {
-            fixed(byte* p = bitmap.Data)
-            {
-                return new Bitmap(bitmap.ImageSize.Width, bitmap.ImageSize.Height, bitmap.Stride, PixelFormat.Format24bppRgb, new IntPtr(p));
-            }
-        }
-        
-        private class Frame : IFrame
-        {
-            private readonly Bitmap _bitmap;
 
-            public Frame(Bitmap bitmap)
+
+        private class Frame : ManagedObjectBase, IFrame
+        {
+            private static long _frameCounter;
+            private readonly byte[] _pixels;
+
+            public Frame(ImageData image)
             {
-                _bitmap = bitmap;
+                (Original, _pixels) = ToBitmap(image);
+                Id = Interlocked.Increment(ref _frameCounter);
             }
-            
-            public void Dispose()
+
+            protected override void Dispose()
             {
-                _bitmap.Dispose();
+                ArrayPool<byte>.Shared.Return(_pixels);
             }
+
+            public Bitmap Original { get; }
 
             public Task<Bitmap> ToScaledBitmapAsync(int width, int height)
             {
@@ -73,16 +66,34 @@ namespace hhnl.gatekeeper.ImageProcessing.VideoStream
                 graphics.CompositingQuality = CompositingQuality.HighSpeed;
                 graphics.InterpolationMode = InterpolationMode.Low;
                 graphics.CompositingMode = CompositingMode.SourceCopy;
-                graphics.DrawImage(_bitmap, 0, 0, width, height);
+                graphics.DrawImage(Original, 0, 0, width, height);
 
                 return Task.FromResult(resized);
             }
 
-            public int OriginalHeight => _bitmap.Height;
+            public int OriginalHeight => Original.Height;
 
-            public int OriginalWidth => _bitmap.Width;
+            public int OriginalWidth => Original.Width;
 
             public long Id { get; }
+
+
+            private (Bitmap bitmap, byte[] arr) ToBitmap(ImageData image)
+            {
+                Bitmap bmp = new(image.ImageSize.Width, image.ImageSize.Height);
+
+                BitmapData data = bmp.LockBits(new Rectangle(0, 0, image.ImageSize.Width, image.ImageSize.Height),
+                    ImageLockMode.ReadWrite,
+                    PixelFormat.Format24bppRgb);
+
+                var array = ArrayPool<byte>.Shared.Rent(image.Data.Length);
+                image.Data.CopyTo(array);
+
+                Marshal.Copy(array, 0, data.Scan0, data.Stride * data.Height);
+
+                bmp.UnlockBits(data);
+                return (bmp, array);
+            }
         }
     }
 }

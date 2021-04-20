@@ -4,8 +4,10 @@ using System.Threading.Tasks;
 
 namespace hhnl.gatekeeper.ImageProcessing.Interfaces
 {
-    public interface IFrame : IDisposable
+    public interface IFrame : IManagedObject
     {
+        Bitmap Original { get; }
+        
         Task<Bitmap> ToScaledBitmapAsync(int width, int height);
         
         int OriginalHeight { get; }

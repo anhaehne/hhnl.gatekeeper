@@ -87,7 +87,22 @@ namespace hhnl.gatekeeper.ImageProcessing.VideoStream
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                var frame = await _videoStream!.GetNextFrameAsync(cancellationToken);
+                IFrame? frame;
+                
+                try
+                {
+                    frame = await _videoStream!.GetNextFrameAsync(cancellationToken);
+                }
+                catch (Exception e)
+                {
+                    // If we reach the failed frame threshold we throw the exception, which will stop processing the stream.
+                    if (_failedFrameCounter >= 30)
+                        throw;
+
+                    _logger.LogError(e, $"Failed to process frame get next frame.");
+                    _failedFrameCounter++;
+                    return;
+                }
                 
                 if(frame is null)
                     break;
@@ -117,6 +132,7 @@ namespace hhnl.gatekeeper.ImageProcessing.VideoStream
 
             var message = MessagePool<NewFrameMessage>.Get();
             message.Frame = frame;
+            using var lease = frame.AddLease();
 
             try
             {
@@ -135,7 +151,7 @@ namespace hhnl.gatekeeper.ImageProcessing.VideoStream
             finally
             {
                 MessagePool<NewFrameMessage>.Return(message);
-                frame.Dispose();
+                lease.Dispose();
             }
 
             // Reset failed frame counter

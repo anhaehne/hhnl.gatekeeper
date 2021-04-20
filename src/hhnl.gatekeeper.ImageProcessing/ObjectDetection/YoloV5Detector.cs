@@ -16,7 +16,6 @@ namespace hhnl.gatekeeper.ImageProcessing.ObjectDetection
     public class YoloV5Detector
     {
         private static readonly object _modelLock = new();
-        private static readonly MLContext _mlContext = new();
         private static readonly ConcurrentQueue<PredictionEngine<YoloV5BitmapData, YoloV5Prediction>> _predictionEngines = new();
 
         private static readonly ConcurrentQueue<TaskCompletionSource<PredictionEngine<YoloV5BitmapData, YoloV5Prediction>>>
@@ -25,13 +24,15 @@ namespace hhnl.gatekeeper.ImageProcessing.ObjectDetection
         private static TransformerChain<OnnxTransformer>? _model;
         private static int _currentEnginesCount;
         private readonly ILogger<YoloV5Detector> _logger;
+        private readonly MLContext _mlContext;
 
         private readonly IOptions<Options> _options;
 
-        public YoloV5Detector(IOptions<Options> options, ILogger<YoloV5Detector> logger)
+        public YoloV5Detector(IOptions<Options> options, ILogger<YoloV5Detector> logger, MLContext mlContext)
         {
             _options = options;
             _logger = logger;
+            _mlContext = mlContext;
 
             if (string.IsNullOrEmpty(options.Value.ModelPath))
                 throw new ArgumentException("ModelPath can't be null or empty.", nameof(options));
@@ -43,7 +44,7 @@ namespace hhnl.gatekeeper.ImageProcessing.ObjectDetection
                 throw new ArgumentException("MaxEngineCount must be greater than 0.", nameof(options));
         }
 
-        public async Task<IReadOnlyList<YoloV5Result>> DetectAsync(IFrame frame)
+        public async Task<IReadOnlyList<YoloV5Result>> DetectAsync(IFrame frame, IReadOnlyCollection<YoloV5ObjectClass> classes)
         {
             _logger.LogTrace($"Detecting objects for frame {frame.Id}");
 
@@ -61,7 +62,7 @@ namespace hhnl.gatekeeper.ImageProcessing.ObjectDetection
                         ImageHeight = frame.OriginalHeight
                     });
 
-                return prediction.GetResults(0.3f, 0.7f);
+                return prediction.GetResults(classes, 0.3f, 0.7f);
             }
             finally
             {
@@ -114,7 +115,7 @@ namespace hhnl.gatekeeper.ImageProcessing.ObjectDetection
 
         private PredictionEngine<YoloV5BitmapData, YoloV5Prediction> CreateEngine(string modelPath)
         {
-            _logger.LogTrace("Creating predication engine.");
+            _logger.LogTrace("Creating predication engine");
             return _mlContext.Model.CreatePredictionEngine<YoloV5BitmapData, YoloV5Prediction>(GetModel(modelPath));
         }
 
@@ -125,12 +126,13 @@ namespace hhnl.gatekeeper.ImageProcessing.ObjectDetection
                 if (_model != null)
                     return _model;
 
-                _logger.LogTrace("Creating predication model.");
+                _logger.LogTrace("Creating predication model");
 
+                
+                
                 var pipeline = _mlContext.Transforms.ExtractPixels(inputColumnName: "bitmap",
                         outputColumnName: "images",
-                        scaleImage: 1f / 255f,
-                        interleavePixelColors: false)
+                        scaleImage: 1f / 255f)
                     .Append(_mlContext.Transforms.ApplyOnnxModel(
                         shapeDictionary: new Dictionary<string, int[]>
                         {
