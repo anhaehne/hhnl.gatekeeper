@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using hhnl.gatekeeper.ImageProcessing.Interfaces;
+using hhnl.gatekeeper.ImageProcessing.Models;
 using Microsoft.Extensions.ObjectPool;
 
 namespace hhnl.gatekeeper.ImageProcessing.VideoStream

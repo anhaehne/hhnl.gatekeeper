@@ -1,24 +1,22 @@
-﻿namespace hhnl.gatekeeper.ImageProcessing.ObjectDetection
+﻿using hhnl.gatekeeper.ImageProcessing.Models;
+using OpenCvSharp;
+
+namespace hhnl.gatekeeper.ImageProcessing.ObjectDetection
 {
     public class ObjectResult
     {
         public ObjectResult(YoloV5Result yoloV5Result)
         {
-            Left = (int)yoloV5Result.BBox[0];
-            Top = (int)yoloV5Result.BBox[1];
-            Width = (int)(yoloV5Result.BBox[0] - yoloV5Result.BBox[2]);
-            Height = (int)(yoloV5Result.BBox[1] - yoloV5Result.BBox[3]);
+            var width = yoloV5Result.BBox[2] - yoloV5Result.BBox[0];
+            var height = yoloV5Result.BBox[3] - yoloV5Result.BBox[1];
+            
+            Position = new Rect((int)yoloV5Result.BBox[0], (int)yoloV5Result.BBox[1], (int)width, (int)height);
             Class = (ObjectClass)yoloV5Result.Class;
         }
 
-        public int Top { get; }
-
-        public int Left { get; }
-
-        public int Width { get; }
-
-        public int Height { get; }
+        public Rect Position { get; }
 
         public ObjectClass Class { get; }
+
     }
 }

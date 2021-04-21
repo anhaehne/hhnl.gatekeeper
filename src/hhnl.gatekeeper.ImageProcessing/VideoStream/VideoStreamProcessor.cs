@@ -137,7 +137,7 @@ namespace hhnl.gatekeeper.ImageProcessing.VideoStream
             try
             {
                 // Process frame
-                await _mediator.Send(message, cancellationToken);
+                await _mediator.Publish(message, cancellationToken);
             }
             catch (Exception e)
             {

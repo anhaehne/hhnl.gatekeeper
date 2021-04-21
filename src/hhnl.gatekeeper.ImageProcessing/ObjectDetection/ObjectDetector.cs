@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 
 namespace hhnl.gatekeeper.ImageProcessing.ObjectDetection
 {
-    public class ObjectDetector : AsyncRequestHandler<NewFrameMessage>
+    public class ObjectDetector : INotificationHandler<NewFrameMessage>
     {
         private readonly Context _context;
         private readonly YoloV5Detector _detector;
@@ -27,7 +27,7 @@ namespace hhnl.gatekeeper.ImageProcessing.ObjectDetection
             _relevantClasses = _options.Value.Classes.Select(Enum.Parse<YoloV5ObjectClass>).ToList();
         }
 
-        protected override async Task Handle(NewFrameMessage request, CancellationToken cancellationToken)
+        public async Task Handle(NewFrameMessage request, CancellationToken cancellationToken)
         {
             // Skip frames that are within the TimeBetweenDetection
             if (_context.LastDetectionTime + _options.Value.TimeBetweenDetection > DateTime.Now)
@@ -39,7 +39,7 @@ namespace hhnl.gatekeeper.ImageProcessing.ObjectDetection
 
             var result = await _detector.DetectAsync(request.Frame, _relevantClasses);
 
-            await _mediator.Send(new NewObjectsMessage
+            await _mediator.Publish(new NewObjectsMessage
                 {
                     Frame = request.Frame,
                     Results = result.Select(x => new ObjectResult(x)).ToList()

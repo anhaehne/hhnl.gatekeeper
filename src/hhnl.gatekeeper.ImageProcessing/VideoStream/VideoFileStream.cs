@@ -10,6 +10,7 @@ using FFMediaToolkit;
 using FFMediaToolkit.Decoding;
 using FFMediaToolkit.Graphics;
 using hhnl.gatekeeper.ImageProcessing.Interfaces;
+using hhnl.gatekeeper.ImageProcessing.Models;
 
 namespace hhnl.gatekeeper.ImageProcessing.VideoStream
 {
